@@ -9,9 +9,9 @@
 //   - Mono or stereo (stereo processes both channels identically)
 //   - No MP3 support — use a tool like Audacity to convert MP3 -> WAV first
 //
-// Usage (PS, runs on ARM core):
+// Usage:
 //   Swap the INPUT_FILE / OUTPUT_FILE defines, adjust effect parameters,
-//   rebuild and run on the board or as a desktop simulation.
+//   rebuild and run on the board or as a desktop simulation (Vitis HLS).
 
 #include <stdio.h>
 #include <stdint.h>
@@ -20,7 +20,7 @@
 #include "distortion.h"
 #include "bitcrusher.h"
 
-// ─── WAV Header ─────────────────────────────────────────────────────────────
+// ─── WAV Header (From StackOverflow)  ─────────────────────────────────────────────────────────────
 // Standard 44-byte PCM WAV header (little-endian)
 #pragma pack(push, 1)
 typedef struct {
@@ -47,7 +47,7 @@ typedef enum {
     EFFECT_BOTH        // distortion first, then bitcrusher
 } EffectMode;
 
-// ─── WAV Validation ─────────────────────────────────────────────────────────
+// ─── WAV Validation (From StackOverflow)  ─────────────────────────────────────────────────────────
 int validate_wav(WavHeader *h) {
     if (strncmp(h->chunk_id,    "RIFF", 4) != 0) { printf("ERROR: Not a RIFF file\n");        return 0; }
     if (strncmp(h->format,      "WAVE", 4) != 0) { printf("ERROR: Not a WAVE file\n");        return 0; }
@@ -61,9 +61,11 @@ int process_wav(
     const char *input_path,
     const char *output_path,
     EffectMode  mode,
+
     // Distortion params
     gain_t      dist_gain,
     data_t      dist_threshold,
+
     // Bitcrusher params
     crush_t     crush_bits
 ) {
@@ -103,6 +105,7 @@ int process_wav(
     // --- Process each sample through the effect(s) ---
     // This loop is what will eventually be replaced by your HLS IP block.
     // On the PL, this maps to streaming samples through the pipeline.
+    
     for (uint32_t i = 0; i < num_samples; i++) {
         data_t sample = audio[i];
         data_t out    = sample;
