@@ -1,5 +1,4 @@
 // wav_processor.cpp
-// PS-side WAV file reader/writer for distortion and bitcrusher effects
 //
 // Reads a 16-bit PCM WAV file, applies the selected effect(s),
 // and writes the result to a new WAV file.
@@ -45,10 +44,10 @@ typedef struct
 // ─── Effect Selection ───────────────────────────────────────────────────────
 typedef enum
 {
-    EFFECT_DISTORTION,
-    EFFECT_BITCRUSHER,
-    EFFECT_BOTH, // distortion first, then bitcrusher
-    EFFECT_ECHO  // echo effect
+    EFFECT_DISTORTION, // distortion only
+    EFFECT_BITCRUSHER, // bitcrusher only
+    EFFECT_BOTH,       // distortion first, then bitcrusher
+    EFFECT_ECHO        // echo only
 } EffectMode;
 
 // ─── WAV Validation (From StackOverflow)  ─────────────────────────────────────────────────────────
@@ -145,8 +144,6 @@ int process_wav(
     fclose(fin);
 
     // --- Process each sample through the effect(s) ---
-    // This loop is what will eventually be replaced by your HLS IP block.
-    // On the PL, this maps to streaming samples through the pipeline.
 
     for (uint32_t i = 0; i < num_samples; i++)
     {
@@ -198,11 +195,11 @@ int process_wav(
 // ─── Entry Point ────────────────────────────────────────────────────────────
 int main()
 {
-    // --- Configure these for your test ---
+    // --- configure ---
     const char *INPUT_FILE = "input.wav";
     const char *OUTPUT_FILE = "output.wav";
 
-    EffectMode mode = EFFECT_ECHO; // EFFECT_DISTORTION, EFFECT_BITCRUSHER, EFFECT_BOTH
+    EffectMode mode = EFFECT_ECHO; // EFFECT_DISTORTION, EFFECT_BITCRUSHER, EFFECT_BOTH, or EFFECT_ECHO
 
     // Distortion parameters
     gain_t dist_gain = 4;          // pre-amp gain (try 2, 4, 8)

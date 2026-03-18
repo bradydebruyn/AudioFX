@@ -1,6 +1,5 @@
 // bitcrusher.cpp
 // Bitcrusher Effect
-// For use in Vitis HLS / software reference implementation
 //
 // Algorithm: y[n] = x[n] & ~((1 << bits_to_crush) - 1)
 // - Zeros out the lowest `bits_to_crush` bits of each sample
@@ -17,17 +16,19 @@
 #include "bitcrusher.h"
 
 void bitcrusher(
-    data_t   x,              // input sample
-    data_t  *y,              // output sample
-    crush_t  bits_to_crush   // number of LSBs to zero out (1–14 for 16-bit audio)
-) {
-#pragma HLS INTERFACE ap_none port=x
-#pragma HLS INTERFACE ap_none port=y
-#pragma HLS INTERFACE ap_none port=bits_to_crush
-#pragma HLS PIPELINE II=1
+    data_t x,             // input sample
+    data_t *y,            // output sample
+    crush_t bits_to_crush // number of LSBs to zero out (1–14 for 16-bit audio)
+)
+{
+#pragma HLS INTERFACE ap_none port = x
+#pragma HLS INTERFACE ap_none port = y
+#pragma HLS INTERFACE ap_none port = bits_to_crush
+#pragma HLS PIPELINE II = 1
 
     // Guard: if bits_to_crush is 0, pass through unchanged
-    if (bits_to_crush == 0) {
+    if (bits_to_crush == 0)
+    {
         *y = x;
         return;
     }

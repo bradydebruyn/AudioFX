@@ -1,6 +1,6 @@
 // echo.cpp
 // Echo Effect
-// For use in Vitis HLS / software reference implementation
+// For use in Vitis HLS
 
 // methodology in this file is referenced from Microsoft Learn: https://learn.microsoft.com/en-us/previous-versions/windows/desktop/wmp/creating-the-echo-effect
 // Microsoft uses algorithm: i = (int)((i * m_fDryMix ) + (delay * m_fWetMix));   where Drymix is percentage of original signal and WetMix is percentage of delayed signal.
@@ -38,7 +38,7 @@ void echo(
 
     int32_t mixed_sample = x + ((int32_t)delayed_sample * (int32_t)feedback >> 15);
 
-        if (mixed_sample > 32767)
+    if (mixed_sample > 32767)
     {
         mixed_sample = 32767;
     }
