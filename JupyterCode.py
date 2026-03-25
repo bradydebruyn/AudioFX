@@ -1,5 +1,6 @@
 # This file contains code for the cells used in our jupyter notebook 
-# For future implementation, plans to add sliders, menu buttons, etc to improve effect selection and application
+# Added menu select for effects as well as sliders for parameters
+# Multi - FX functional
 
 
 ########################### Overlay Cell ##############################
@@ -119,6 +120,72 @@ def to_mono(samples, n_ch):
     raw = ip.read(y_off) & 0xFFFF
     return raw if raw < 0x8000 else raw - 0x10000
 
+
+def apply_distortion(samples, pre_gain=4, threshold=16383):
+    dist_ip.write(DIST_GAIN,      pre_gain  & 0xFF)
+    dist_ip.write(DIST_THRESHOLD, threshold & 0xFFFF)
+
+    out = np.empty(len(samples), dtype=np.int16)
+    for i, x in enumerate(samples):
+        out[i] = run_sample(dist_ip, DIST_CTRL, DIST_X, DIST_Y, x)
+    return out
+
+
+def apply_bitcrusher(samples, bits_to_crush=4):
+    crush_ip.write(CRUSH_BITS, bits_to_crush & 0xF)
+
+    out = np.empty(len(samples), dtype=np.int16)
+    for i, x in enumerate(samples):
+        out[i] = run_sample(crush_ip, CRUSH_CTRL, CRUSH_X, CRUSH_Y, x)
+    return out
+
+
+def apply_echo(samples, delay_ms=300, feedback=0.5, sr=48000):
+    delay_samples = int(delay_ms * sr / 1000)
+    feedback_q15  = int(feedback * 32768)   # convert 0.0–1.0 to Q1.15 integer
+
+    echo_ip.write(ECHO_DELAY,    delay_samples & 0x7FFFFFFF)
+    echo_ip.write(ECHO_FEEDBACK, feedback_q15  & 0xFFFF)
+    echo_ip.write(ECHO_BUFIDX,   0)  # reset circular buffer for clean start
+
+    out = np.empty(len(samples), dtype=np.int16)
+    for i, x in enumerate(samples):
+        out[i] = run_sample(echo_ip, ECHO_CTRL, ECHO_X, ECHO_Y, x)
+    return out
+  #######################################################################
+
+
+
+
+
+########################### Upload Cell ##############################
+import ipywidgets as widgets
+from IPython.display import display, Audio, HTML, clear_output
+import base64, time
+
+# ── Upload ────────────────────────────────────────────────────────────────
+upload = widgets.FileUpload(accept='.wav', multiple=False, description='Upload WAV')
+display(upload)
+#######################################################################
+
+
+########################### Run/Download Cell ##############################
+# ── Run this cell after uploading ────────────────────────────────────────
+# Grab the uploaded file
+fname    = next(iter(upload.value))
+raw      = upload.value[fname]['content']   # raw bytes
+
+samples, sr, n_ch = load_wav(raw)
+mono = to_mono(samples, n_ch)
+
+print(f'Loaded: {fname}')
+print(f'{sr} Hz  ·  {n_ch} ch  ·  {len(mono)} samples  ·  {len(mono)/sr:.2f}s')
+
+# ── Apply effect ──────────────────────────────────────────────────────────
+# Swap in apply_bitcrusher() or apply_echo() as needed, add menu for selection/multi-fx?
+
+t0  = time.perf_counter()
+
 # Individual effect applications
 dist_box  = widgets.VBox([
     widgets.IntSlider(value=4,     min=1,    max=16,    description='Gain',      continuous_update=False),
@@ -166,37 +233,7 @@ def on_run(btn):
 
 run_btn.on_click(on_run)
 display(effect_sel, param_area, run_btn, output_area)
-  #######################################################################
 
-
-########################### Upload Cell ##############################
-import ipywidgets as widgets
-from IPython.display import display, Audio, HTML, clear_output
-import base64, time
-
-# ── Upload ────────────────────────────────────────────────────────────────
-upload = widgets.FileUpload(accept='.wav', multiple=False, description='Upload WAV')
-display(upload)
-#######################################################################
-
-
-########################### Run/Download Cell ##############################
-# ── Run this cell after uploading ────────────────────────────────────────
-# Grab the uploaded file
-fname    = next(iter(upload.value))
-raw      = upload.value[fname]['content']   # raw bytes
-
-samples, sr, n_ch = load_wav(raw)
-mono = to_mono(samples, n_ch)
-
-print(f'Loaded: {fname}')
-print(f'{sr} Hz  ·  {n_ch} ch  ·  {len(mono)} samples  ·  {len(mono)/sr:.2f}s')
-
-# ── Apply effect ──────────────────────────────────────────────────────────
-# Swap in apply_bitcrusher() or apply_echo() as needed, add menu for selection/multi-fx?
-
-t0  = time.perf_counter()
-out = apply_distortion(mono, pre_gain=4, threshold=16383)
 elapsed = time.perf_counter() - t0
 
 print(f'Done in {elapsed*1000:.0f} ms  ({len(mono)/elapsed/1000:.0f}k samples/sec)')
