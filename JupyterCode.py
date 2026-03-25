@@ -170,23 +170,19 @@ display(upload)
 
 
 ########################### Run/Download Cell ##############################
-# ── Run this cell after uploading ────────────────────────────────────────
-# Grab the uploaded file
-fname    = next(iter(upload.value))
-raw      = upload.value[fname]['content']   # raw bytes
+import base64, time
+import ipywidgets as widgets
+from IPython.display import display, Audio, HTML, clear_output
 
+# ── Load uploaded file ────────────────────────────────────────────────────
+fname        = next(iter(upload.value))
+raw          = upload.value[fname]['content']
 samples, sr, n_ch = load_wav(raw)
-mono = to_mono(samples, n_ch)
-
+mono         = to_mono(samples, n_ch)
 print(f'Loaded: {fname}')
 print(f'{sr} Hz  ·  {n_ch} ch  ·  {len(mono)} samples  ·  {len(mono)/sr:.2f}s')
 
-# ── Apply effect ──────────────────────────────────────────────────────────
-# Swap in apply_bitcrusher() or apply_echo() as needed, add menu for selection/multi-fx?
-
-t0  = time.perf_counter()
-
-# Individual effect applications
+# ── Sliders ───────────────────────────────────────────────────────────────
 dist_box  = widgets.VBox([
     widgets.IntSlider(value=4,     min=1,    max=16,    description='Gain',      continuous_update=False),
     widgets.IntSlider(value=16383, min=1000, max=32767, description='Threshold', continuous_update=False)
@@ -196,10 +192,11 @@ crush_box = widgets.VBox([
 ])
 echo_box  = widgets.VBox([
     widgets.IntSlider(value=300,  min=10,  max=1000, description='Delay (ms)',  continuous_update=False),
-    widgets.FloatSlider(value=0.5, min=0.0, max=0.95, description='Feedback', continuous_update=False)
+    widgets.FloatSlider(value=0.5, min=0.0, max=0.95, description='Feedback',   continuous_update=False)
 ])
 
-param_map = {'Distortion': dist_box, 'Bitcrusher': crush_box, 'Echo': echo_box}
+# ── Effect selector ───────────────────────────────────────────────────────
+param_map  = {'Distortion': dist_box, 'Bitcrusher': crush_box, 'Echo': echo_box}
 effect_sel = widgets.ToggleButtons(options=['Distortion', 'Bitcrusher', 'Echo'])
 param_area = widgets.Output()
 
@@ -209,15 +206,21 @@ def show_params(change):
         display(param_map[effect_sel.value])
 
 effect_sel.observe(show_params, names='value')
-show_params(None)  # show default on load
+show_params(None)  # render default params on load
+
+# ── Run button ────────────────────────────────────────────────────────────
+run_btn     = widgets.Button(description='▶ Apply', button_style='success')
+output_area = widgets.Output()
 
 def on_run(btn):
     with output_area:
         clear_output(wait=True)
         effect = effect_sel.value
 
+        t0 = time.perf_counter()
+
         if effect == 'Distortion':
-            gain, thresh = dist_box.children   # unpack the VBox children
+            gain, thresh = dist_box.children
             out = apply_distortion(mono, pre_gain=gain.value, threshold=thresh.value)
 
         elif effect == 'Bitcrusher':
@@ -228,26 +231,21 @@ def on_run(btn):
             delay_w, feedback_w = echo_box.children
             out = apply_echo(mono, delay_ms=delay_w.value, feedback=feedback_w.value, sr=sr)
 
+        elapsed = time.perf_counter() - t0
+        print(f'Done in {elapsed*1000:.0f} ms  ({len(mono)/elapsed/1000:.0f}k samples/sec)')
+
+        # ── Playback ──────────────────────────────────────────────────────
         wav_bytes = save_wav(out, sr, n_ch=1)
         display(Audio(data=wav_bytes, rate=sr))
 
+        # ── Download link ─────────────────────────────────────────────────
+        safe_name = effect.replace(' ', '_').lower()
+        out_name  = f'output_{safe_name}.wav'
+        b64       = base64.b64encode(wav_bytes).decode()
+        display(HTML(
+            f'<a href="data:audio/wav;base64,{b64}" download="{out_name}">'
+            f'⬇ Download {out_name}</a>'
+        ))
+
 run_btn.on_click(on_run)
 display(effect_sel, param_area, run_btn, output_area)
-
-elapsed = time.perf_counter() - t0
-
-print(f'Done in {elapsed*1000:.0f} ms  ({len(mono)/elapsed/1000:.0f}k samples/sec)')
-
-# ── Listen in-browser ─────────────────────────────────────────────────────
-wav_bytes = save_wav(out, sr, n_ch=1)
-display(Audio(data=wav_bytes, rate=sr))
-
-# ── Download link ─────────────────────────────────────────────────────────
-b64      = base64.b64encode(wav_bytes).decode()
-out_name = 'output_distortion.wav'
-display(HTML(
-    f'<a href="data:audio/wav;base64,{b64}" download="{out_name}">'
-    f'⬇ Download {out_name}</a>'
-))
-
-#######################################################################
