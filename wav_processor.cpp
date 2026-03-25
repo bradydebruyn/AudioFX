@@ -47,7 +47,8 @@ typedef enum
     EFFECT_DISTORTION, // distortion only
     EFFECT_BITCRUSHER, // bitcrusher only
     EFFECT_BOTH,       // distortion first, then bitcrusher
-    EFFECT_ECHO        // echo only
+    EFFECT_ECHO,       // echo only
+    EFFECT_ALL         // distortion, then bitcrush, then echo
 } EffectMode;
 
 // ─── WAV Validation (From StackOverflow)  ─────────────────────────────────────────────────────────
@@ -167,6 +168,14 @@ int process_wav(
             break;
 
         case EFFECT_ECHO:
+            echo(sample, &out, echo_delay, echo_feedback);
+            break;
+
+        case EFFECT_ALL:
+            distortion(sample, &out, dist_gain, dist_threshold);
+            sample = out;
+            bitcrusher(sample, &out, crush_bits);
+            sample = out;
             echo(sample, &out, echo_delay, echo_feedback);
             break;
         }
