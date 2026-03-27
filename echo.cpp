@@ -20,10 +20,11 @@ void echo(
 )
 {
 
-#pragma HLS INTERFACE ap_none port = x
-#pragma HLS INTERFACE ap_none port = y
-#pragma HLS INTERFACE ap_none port = delay
-#pragma HLS INTERFACE ap_none port = feedback
+#pragma HLS INTERFACE s_axilite port = x
+#pragma HLS INTERFACE s_axilite port = y
+#pragma HLS INTERFACE s_axilite port = delay
+#pragma HLS INTERFACE s_axilite port = feedback
+#pragma HLS INTERFACE ap_ctrl_none port = return
 #pragma HLS PIPELINE II = 1
 
     // using the current index and delay, calculate the index of the delayed sample

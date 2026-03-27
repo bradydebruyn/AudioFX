@@ -19,10 +19,11 @@ void distortion(
     data_t threshold // clipping ceiling (positive value, e.g., 16383 = 50%)
 )
 {
-#pragma HLS INTERFACE ap_none port = x
-#pragma HLS INTERFACE ap_none port = y
-#pragma HLS INTERFACE ap_none port = pre_gain
-#pragma HLS INTERFACE ap_none port = threshold
+#pragma HLS INTERFACE s_axilite port = x
+#pragma HLS INTERFACE s_axilite port = y
+#pragma HLS INTERFACE s_axilite port = pre_gain
+#pragma HLS INTERFACE s_axilite port = threshold
+#pragma HLS INTERFACE ap_ctrl_none port = return
 #pragma HLS PIPELINE II = 1
 
     // Step 1: Apply pre-gain using fixed-point multiplication

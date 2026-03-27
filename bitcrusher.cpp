@@ -21,9 +21,10 @@ void bitcrusher(
     crush_t bits_to_crush // number of LSBs to zero out (1–14 for 16-bit audio)
 )
 {
-#pragma HLS INTERFACE ap_none port = x
-#pragma HLS INTERFACE ap_none port = y
-#pragma HLS INTERFACE ap_none port = bits_to_crush
+#pragma HLS INTERFACE s_axilite port = x
+#pragma HLS INTERFACE s_axilite port = y
+#pragma HLS INTERFACE s_axilite port = bits_to_crush
+#pragma HLS INTERFACE ap_ctrl_none port = return
 #pragma HLS PIPELINE II = 1
 
     // Guard: if bits_to_crush is 0, pass through unchanged
