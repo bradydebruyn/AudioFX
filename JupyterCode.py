@@ -95,7 +95,7 @@ def to_mono(samples, n_ch):
 
 
 ########################### Sample Hardware Driver Cell ##############################
-  def run_sample(ip, ctrl, x_off, y_off, x_val):
+def run_sample(ip, ctrl, x_off, y_off, x_val):
     """
     Send one int16 sample through an s_axilite IP and return the int16 result.
     
@@ -174,6 +174,8 @@ import base64, time
 import ipywidgets as widgets
 from IPython.display import display, Audio, HTML, clear_output
 
+print(pywidgets.__version__)
+
 # ── Load uploaded file ────────────────────────────────────────────────────
 fname        = next(iter(upload.value))
 raw          = upload.value[fname]['content']
@@ -181,6 +183,7 @@ samples, sr, n_ch = load_wav(raw)
 mono         = to_mono(samples, n_ch)
 print(f'Loaded: {fname}')
 print(f'{sr} Hz  ·  {n_ch} ch  ·  {len(mono)} samples  ·  {len(mono)/sr:.2f}s')
+print(f'Raw: {raw}')
 
 # ── Sliders ───────────────────────────────────────────────────────────────
 dist_box  = widgets.VBox([
