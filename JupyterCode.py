@@ -174,7 +174,7 @@ import base64, time
 import ipywidgets as widgets
 from IPython.display import display, Audio, HTML, clear_output
 
-print(pywidgets.__version__)
+print(ipywidgets.__version__)
 
 # ── Load uploaded file ────────────────────────────────────────────────────
 fname        = next(iter(upload.value))
