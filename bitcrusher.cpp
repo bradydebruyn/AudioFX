@@ -1,4 +1,6 @@
-// bitcrusher.cpp
+
+// bitcrusher.cpp  –  AXI-Stream version
+// bits_to_crush stays as an AXI-Lite side-channel register.
 // Bitcrusher Effect
 //
 // Algorithm: y[n] = x[n] & ~((1 << bits_to_crush) - 1)
@@ -16,29 +18,30 @@
 #include "bitcrusher.h"
 
 void bitcrusher(
-    data_t x,             // input sample
-    data_t *y,            // output sample
-    crush_t bits_to_crush // number of LSBs to zero out (1–14 for 16-bit audio)
+    hls::stream<ap_axiu<16,0,0,0>> &x_stream,
+    hls::stream<ap_axiu<16,0,0,0>> &y_stream,
+    crush_t bits_to_crush
 )
 {
-#pragma HLS INTERFACE s_axilite port = x
-#pragma HLS INTERFACE s_axilite port = y
-#pragma HLS INTERFACE s_axilite port = bits_to_crush
-#pragma HLS INTERFACE ap_ctrl_none port = return
-#pragma HLS PIPELINE II = 1
+#pragma HLS INTERFACE axis      port=x_stream
+#pragma HLS INTERFACE axis      port=y_stream
+#pragma HLS INTERFACE s_axilite port=bits_to_crush
+#pragma HLS INTERFACE s_axilite port=return
 
-    // Guard: if bits_to_crush is 0, pass through unchanged
-    if (bits_to_crush == 0)
-    {
-        *y = x;
-        return;
-    }
+    ap_axiu<16,0,0,0> in_samp, out_samp;
+    uint16_t mask = (bits_to_crush == 0)
+                    ? 0xFFFF
+                    : (uint16_t)(~((uint16_t)((1u << bits_to_crush) - 1u)));
 
-    // Build mask: all ones except the bottom `bits_to_crush` bits
-    // e.g., bits_to_crush=4 -> mask = 0xFFF0
-    // Cast to uint16_t for the shift, then back to signed for audio arithmetic
-    uint16_t mask = (uint16_t)(~((uint16_t)((1u << bits_to_crush) - 1u)));
+    do {
+#pragma HLS PIPELINE II=1
+        x_stream.read(in_samp);
+        data_t x = (data_t)(int16_t)in_samp.data;
 
-    // Apply mask — this is a bitwise AND, pure combinational logic
-    *y = (data_t)((uint16_t)x & mask);
+        out_samp.data = (ap_uint<16>)((uint16_t)x & mask);
+        out_samp.last = in_samp.last;
+        out_samp.keep = in_samp.keep;
+        y_stream.write(out_samp);
+
+    } while (!in_samp.last);
 }
