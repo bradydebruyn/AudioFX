@@ -3,8 +3,6 @@
 #define DISTORTION_H
 
 #include <stdint.h>
-#include "ap_int.h"
-#include "ap_fixed.h"
 #include "hls_stream.h"
 #include "ap_axi_sdata.h"
 
