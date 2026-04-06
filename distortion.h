@@ -3,6 +3,10 @@
 #define DISTORTION_H
 
 #include <stdint.h>
+#include "ap_int.h"
+#include "ap_fixed.h"
+#include "hls_stream.h"
+#include "ap_axi_sdata.h"
 
 // Audio sample: 16-bit signed (matches ADAU1761 codec output)
 typedef int16_t data_t;
@@ -11,12 +15,11 @@ typedef int16_t data_t;
 typedef uint8_t gain_t;
 
 // Wider accumulator to hold pre-gain result without overflow
-// 16-bit sample * 8-bit gain = needs up to 24 bits; use 32 to be safe
 typedef int32_t acc_t;
 
 void distortion(
-    data_t  x,
-    data_t *y,
+    hls::stream<ap_axiu<16,0,0,0>> &x_stream,
+    hls::stream<ap_axiu<16,0,0,0>> &y_stream,
     gain_t  pre_gain,
     data_t  threshold
 );
