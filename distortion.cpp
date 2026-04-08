@@ -14,8 +14,8 @@
 #include "distortion.h"
 
 void distortion(
-    hls::stream<ap_axiu<16,0,0,0>> &x_stream,
-    hls::stream<ap_axiu<16,0,0,0>> &y_stream,
+    hls::stream<ap_axiu<32,0,0,0>> &x_stream,
+    hls::stream<ap_axiu<32,0,0,0>> &y_stream,
     gain_t pre_gain,
     data_t threshold
 )
@@ -26,7 +26,7 @@ void distortion(
 #pragma HLS INTERFACE s_axilite port=threshold
 #pragma HLS INTERFACE s_axilite port=return
 
-    ap_axiu<16,0,0,0> in_samp, out_samp;
+    ap_axiu<32,0,0,0> in_samp, out_samp;
 
     do {
 #pragma HLS PIPELINE II=1
@@ -40,7 +40,7 @@ void distortion(
         else if (amplified < -(acc_t)threshold) clipped = -threshold;
         else                                    clipped =  (data_t)amplified;
 
-        out_samp.data = (ap_uint<16>)(int16_t)clipped;
+        out_samp.data = (ap_uint<32>)(int32_t)clipped;
         out_samp.last = in_samp.last;
         out_samp.keep = in_samp.keep;
         y_stream.write(out_samp);
