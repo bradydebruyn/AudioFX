@@ -18,8 +18,8 @@
 #include "bitcrusher.h"
 
 void bitcrusher(
-    hls::stream<ap_axiu<16,0,0,0>> &x_stream,
-    hls::stream<ap_axiu<16,0,0,0>> &y_stream,
+    hls::stream<ap_axiu<32,0,0,0>> &x_stream,
+    hls::stream<ap_axiu<32,0,0,0>> &y_stream,
     crush_t bits_to_crush
 )
 {
@@ -28,17 +28,17 @@ void bitcrusher(
 #pragma HLS INTERFACE s_axilite port=bits_to_crush
 #pragma HLS INTERFACE s_axilite port=return
 
-    ap_axiu<16,0,0,0> in_samp, out_samp;
+    ap_axiu<32,0,0,0> in_samp, out_samp;
     uint16_t mask = (bits_to_crush == 0)
                     ? 0xFFFF
-                    : (uint16_t)(~((uint16_t)((1u << bits_to_crush) - 1u)));
+                    : (uint32_t)(~((uint32_t)((1u << bits_to_crush) - 1u)));
 
     do {
 #pragma HLS PIPELINE II=1
         x_stream.read(in_samp);
-        data_t x = (data_t)(int16_t)in_samp.data;
+        data_t x = (data_t)(int32_t)in_samp.data;
 
-        out_samp.data = (ap_uint<16>)((uint16_t)x & mask);
+        out_samp.data = (ap_uint<32>)((uint32_t)x & mask);
         out_samp.last = in_samp.last;
         out_samp.keep = in_samp.keep;
         y_stream.write(out_samp);
