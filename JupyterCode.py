@@ -3,39 +3,34 @@ from pynq import Overlay, allocate
 import numpy as np
 import wave, io
 
-ol = Overlay('audiofx.bit') #change to JuPyter Notebook path
+ol = Overlay('audiofx.bit')  # update  path
 
-# IP cores (ap_ctrl_hs block control + AXI-Lite param registers)
-dist_ip  = ol.distortion_0
-crush_ip = ol.bitcrusher_0
-echo_ip  = ol.echo_0
+# Single combined IP core
+fx_ip  = ol.audiofx_0
 
-# One DMA per effect – adjust names to match your block design
-dist_dma  = ol.axi_dma_dist
-crush_dma = ol.axi_dma_crush
-echo_dma  = ol.axi_dma_echo
+# Single DMA for the combined IP
+fx_dma = ol.axi_dma_0
 
 print(ol.ip_dict.keys())
 #######################################################################
 
 
-########################### Register Cell ##############################
-# AXI-Lite offsets for parameter registers only.
-# x / y are now AXI-Stream – no register offsets needed for them.
+########################### Register Offsets Cell ##############################
+# AXI-Lite register offsets
 
-# ── distortion_0 ──────────────────────────────────────────────
-DIST_CTRL      = 0x00
-DIST_GAIN      = 0x10   # update these offsets to match new HLS export
-DIST_THRESHOLD = 0x18
+CTRL           = 0x00   # ap_ctrl_hs  — write 0x01 to start
 
-# ── bitcrusher_0 ──────────────────────────────────────────────
-CRUSH_CTRL = 0x00
-CRUSH_BITS = 0x10
+EFFECT_SELECT  = 0x10   # uint8_t  —  0=distortion  1=bitcrusher  2=echo
+PRE_GAIN       = 0x18   # uint8_t  —  distortion pre-gain (1–16)
+THRESHOLD      = 0x20   # int16_t  —  distortion clip threshold (1–32767)
+BITS_TO_CRUSH  = 0x28   # uint8_t  —  bitcrusher depth (0–14)
+ECHO_DELAY     = 0x30   # int32_t  —  echo delay in samples (0–47999)
+ECHO_FEEDBACK  = 0x38   # int16_t  —  echo feedback Q1.15 (0–32767)
 
-# ── echo_0 ────────────────────────────────────────────────────
-ECHO_CTRL     = 0x00
-ECHO_DELAY    = 0x10
-ECHO_FEEDBACK = 0x18
+# Effect selector constants (must match #defines in audiofx.h)
+FX_DISTORTION = 0
+FX_BITCRUSHER = 1
+FX_ECHO       = 2
 #######################################################################
 
 
@@ -52,7 +47,7 @@ def load_wav(path_or_bytes):
         n_frames = wf.getnframes()
         sw       = wf.getsampwidth()
         if sw != 2:
-            raise ValueError(f'Need 16-bit PCM. Got {sw*8}-bit. '
+            raise ValueError(f'Need 16-bit PCM, got {sw*8}-bit. '
                              'Convert: ffmpeg -i in.wav -acodec pcm_s16le out.wav')
         raw = wf.readframes(n_frames)
 
@@ -78,66 +73,62 @@ def to_mono(samples, n_ch):
 
 
 ########################### DMA Driver Cell ##############################
-def run_dma(ip, dma, param_writes, samples):
+def run_fx(effect_id, param_writes, samples):
     """
-    Send a full numpy int16 block through an AXI-Stream IP via DMA.
+    Send a block of audio through the unified audiofx IP via DMA.
 
-    param_writes : list of (offset, value) tuples for AXI-Lite param regs
+    effect_id    : FX_DISTORTION, FX_BITCRUSHER, or FX_ECHO
+    param_writes : list of (offset, value) for effect-specific AXI-Lite regs
     samples      : 1-D numpy int16 array (mono)
     returns      : numpy int16 array of processed samples
     """
     n = len(samples)
 
-    # Write parameters over AXI-Lite before starting the kernel
+    # Write effect selector first, then effect-specific parameters
+    fx_ip.write(EFFECT_SELECT, int(effect_id))
     for offset, value in param_writes:
-        ip.write(offset, int(value))
+        fx_ip.write(offset, int(value))
 
-    # Allocate contiguous physical memory buffers (PYNQ allocate)
+    # Allocate contiguous physical memory
     in_buf  = allocate(shape=(n,), dtype=np.int16)
     out_buf = allocate(shape=(n,), dtype=np.int16)
-
     np.copyto(in_buf, samples)
 
-    # Start the HLS kernel (ap_ctrl_hs: write 0x01 to kick off, it auto-clears)
-    ip.write(0x00, 0x01)
+    # Kick the HLS kernel (ap_ctrl_hs)
+    fx_ip.write(CTRL, 0x01)
 
-    # Launch DMA transfers (send triggers TLAST on the last sample automatically)
-    dma.sendchannel.transfer(in_buf)
-    dma.recvchannel.transfer(out_buf)
-
-    # Wait for both channels to finish
-    dma.sendchannel.wait()
-    dma.recvchannel.wait()
+    # Launch DMA — sendchannel asserts TLAST on the last sample automatically
+    fx_dma.sendchannel.transfer(in_buf)
+    fx_dma.recvchannel.transfer(out_buf)
+    fx_dma.sendchannel.wait()
+    fx_dma.recvchannel.wait()
 
     result = np.array(out_buf, dtype=np.int16)
-
-    # Free physical buffers
     in_buf.freebuffer()
     out_buf.freebuffer()
-
     return result
 
 
 def apply_distortion(samples, pre_gain=4, threshold=16383):
-    return run_dma(dist_ip, dist_dma,
-                   [(DIST_GAIN, pre_gain & 0xFF),
-                    (DIST_THRESHOLD, threshold & 0xFFFF)],
-                   samples)
+    return run_fx(FX_DISTORTION,
+                  [(PRE_GAIN,  pre_gain  & 0xFF),
+                   (THRESHOLD, threshold & 0xFFFF)],
+                  samples)
 
 
 def apply_bitcrusher(samples, bits_to_crush=4):
-    return run_dma(crush_ip, crush_dma,
-                   [(CRUSH_BITS, bits_to_crush & 0xF)],
-                   samples)
+    return run_fx(FX_BITCRUSHER,
+                  [(BITS_TO_CRUSH, bits_to_crush & 0xF)],
+                  samples)
 
 
 def apply_echo(samples, delay_ms=300, feedback=0.5, sr=48000):
     delay_samples = int(delay_ms * sr / 1000)
     feedback_q15  = int(feedback * 32768)
-    return run_dma(echo_ip, echo_dma,
-                   [(ECHO_DELAY,    delay_samples & 0x7FFFFFFF),
-                    (ECHO_FEEDBACK, feedback_q15  & 0xFFFF)],
-                   samples)
+    return run_fx(FX_ECHO,
+                  [(ECHO_DELAY,    delay_samples & 0x7FFFFFFF),
+                   (ECHO_FEEDBACK, feedback_q15  & 0xFFFF)],
+                  samples)
 #######################################################################
 
 
@@ -162,17 +153,22 @@ samples, sr, n_ch = load_wav(raw)
 mono = to_mono(samples, n_ch)
 print(f'Loaded: {fname}  |  {sr} Hz  ·  {n_ch} ch  ·  {len(mono)} samples  ·  {len(mono)/sr:.2f}s')
 
-# ── Sliders ───────────────────────────────────────────────────────────────
+# ── Parameter sliders ─────────────────────────────────────────────────────
 dist_box = widgets.VBox([
-    widgets.IntSlider(  value=4,     min=1,    max=16,    description='Gain',      continuous_update=False),
-    widgets.IntSlider(  value=16383, min=1000, max=32767, description='Threshold', continuous_update=False)
+    widgets.IntSlider(  value=4,     min=1,    max=16,    description='Gain',
+                        continuous_update=False),
+    widgets.IntSlider(  value=16383, min=1000, max=32767, description='Threshold',
+                        continuous_update=False),
 ])
 crush_box = widgets.VBox([
-    widgets.IntSlider(  value=4,   min=0,   max=14,  description='Crush bits', continuous_update=False)
+    widgets.IntSlider(  value=4, min=0, max=14, description='Crush bits',
+                        continuous_update=False),
 ])
 echo_box = widgets.VBox([
-    widgets.IntSlider(  value=300, min=10,  max=1000, description='Delay (ms)', continuous_update=False),
-    widgets.FloatSlider(value=0.5, min=0.0, max=0.95, description='Feedback',   continuous_update=False)
+    widgets.IntSlider(  value=300, min=10,  max=1000, description='Delay (ms)',
+                        continuous_update=False),
+    widgets.FloatSlider(value=0.5, min=0.0, max=0.95, description='Feedback',
+                        continuous_update=False),
 ])
 
 # ── Effect selector ───────────────────────────────────────────────────────
@@ -200,7 +196,8 @@ def on_run(btn):
 
         if effect == 'Distortion':
             gain_w, thresh_w = dist_box.children
-            out = apply_distortion(mono, pre_gain=gain_w.value, threshold=thresh_w.value)
+            out = apply_distortion(mono, pre_gain=gain_w.value,
+                                         threshold=thresh_w.value)
 
         elif effect == 'Bitcrusher':
             crush_w, = crush_box.children
@@ -208,7 +205,8 @@ def on_run(btn):
 
         elif effect == 'Echo':
             delay_w, feedback_w = echo_box.children
-            out = apply_echo(mono, delay_ms=delay_w.value, feedback=feedback_w.value, sr=sr)
+            out = apply_echo(mono, delay_ms=delay_w.value,
+                                   feedback=feedback_w.value, sr=sr)
 
         elapsed = time.perf_counter() - t0
         print(f'Done in {elapsed*1000:.0f} ms  ({len(mono)/elapsed/1000:.1f}k samples/sec)')
