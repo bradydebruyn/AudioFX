@@ -9,10 +9,10 @@
 //  Type aliases
 // ─────────────────────────────────────────────
 
-typedef int16_t  data_t;      // 16-bit signed audio sample
+typedef int32_t  data_t;      // 16-bit signed audio sample
 typedef int32_t  acc_t;       // wider accumulator (pre-gain, mixing)
 typedef int32_t  delay_t;     // delay in samples
-typedef int16_t  feedback_t;  // Q1.15 feedback coefficient
+typedef int32_t  feedback_t;  // Q1.15 feedback coefficient
 typedef uint8_t  gain_t;      // pre-gain multiplier (1–16)
 typedef uint8_t  crush_t;     // bits to crush (0–14)
 
@@ -32,8 +32,8 @@ typedef uint8_t  crush_t;     // bits to crush (0–14)
 //  Top-level function declaration
 // ─────────────────────────────────────────────
 void audiofx(
-    hls::stream<ap_axiu<16,0,0,0>> &x_stream,   // AXI-Stream input
-    hls::stream<ap_axiu<16,0,0,0>> &y_stream,   // AXI-Stream output
+    hls::stream<ap_axiu<32,0,0,0>> &x_stream,   // AXI-Stream input
+    hls::stream<ap_axiu<32,0,0,0>> &y_stream,   // AXI-Stream output
 
     // ── effect selector ──────────────────────
     uint8_t  effect_select,   // 0=distortion  1=bitcrusher  2=echo
