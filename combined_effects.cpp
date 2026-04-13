@@ -36,8 +36,8 @@ static int    current_index = 0;
 //  Top-level function
 // ─────────────────────────────────────────────────────────────────────────────
 void audiofx(
-    hls::stream<ap_axiu<16,0,0,0>> &x_stream,
-    hls::stream<ap_axiu<16,0,0,0>> &y_stream,
+    hls::stream<ap_axiu<32,0,0,0>> &x_stream,
+    hls::stream<ap_axiu<32,0,0,0>> &y_stream,
 
     uint8_t    effect_select,
     gain_t     pre_gain,
@@ -67,8 +67,8 @@ void audiofx(
     // This is a scalar, computed outside the sample loop so HLS does not
     // re-evaluate it every cycle.
     uint16_t bc_mask = (bits_to_crush == 0)
-                       ? (uint16_t)0xFFFF
-                       : (uint16_t)(~((1u << bits_to_crush) - 1u));
+                       ? (uint32_t)0xFFFF
+                       : (uint32_t)(~((1u << bits_to_crush) - 1u));
 
     // ── Clamp echo_delay to valid range ──────────────────────────────────────
     delay_t safe_delay = echo_delay;
@@ -77,13 +77,13 @@ void audiofx(
 
     // ── Sample-processing loop ───────────────────────────────────────────────
     // Runs until the upstream DMA asserts TLAST on the final sample.
-    ap_axiu<16,0,0,0> in_samp, out_samp;
+    ap_axiu<32,0,0,0> in_samp, out_samp;
 
     do {
 #pragma HLS PIPELINE II=1
 
         x_stream.read(in_samp);
-        data_t x = (data_t)(int16_t)in_samp.data;   // sign-extend from 16-bit AXI slot
+        data_t x = (data_t)(int32_t)in_samp.data;   // sign-extend from 16-bit AXI slot
         data_t y = 0;
 
         // ── Effect routing ───────────────────────────────────────────────────
@@ -132,7 +132,7 @@ void audiofx(
         }
 
         // ── Pack output sample and forward downstream ─────────────────────
-        out_samp.data = (ap_uint<16>)(int16_t)y;
+        out_samp.data = (ap_uint<32>)(int32_t)y;
         out_samp.last = in_samp.last;   // propagate TLAST
         out_samp.keep = in_samp.keep;
         y_stream.write(out_samp);
